@@ -1,4 +1,4 @@
-#include <Arduino.h>
+#include "common.h"
 
 #define DISPLAY_BRIGHTNESS 10
 

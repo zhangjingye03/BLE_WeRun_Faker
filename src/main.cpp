@@ -1,8 +1,6 @@
-#include <Arduino.h>
-#include <Preferences.h>
+#include "common.h"
 #include "ble.h"
 #include "my_wifi.h"
-#include "common.h"
 #include "3461as.h"
 
 #define random(x) (esp_random() % x)
@@ -15,17 +13,20 @@ WiFiClass WiFi;
 Preferences *pref;
 int steps = 12345, last = -1;
 int targets = 10000;
-char connectedDevices = 0, oldConnectedDevices = 0;
+char connectedDevices = 0;
 char addPerTime = 0;
 char led = 0, bled = 0;
 char isPressing = false;
 uint16_t count = 0, generating = 0, buttonPress = 0;
 char g1 = 0, g2 = 0, g3 = 0, g4 = 0;
 
-uint8_t split_digit(int in, int digit) {
-
+uint8_t split_digit(int in, int digit, char fix = 1) {
   while (--digit) {
     in /= 10;
+  }
+  if (fix) {
+    // dirty fix: if return zero and make it divided, kernel will panic
+    return (in % 10 == 0) ? 9 : in % 10;
   }
   return in % 10;
 }
@@ -40,7 +41,7 @@ void setup() {
   // validate targets
   targets = pref->getInt("targets", 0);
   Serial.print("- targets from eeprom is "); Serial.println(targets);
-  if (targets <= 10000 || targets > 98800) {
+  if (targets <= 10000 || targets > 100000) {
     Serial.println("- [!] Data is broken. Reset to 19999.");
     targets = 19999;
     pref->putInt("targets", targets);
@@ -57,19 +58,19 @@ void setup() {
   last = pref->getInt("last", -1);
   Serial.print("- last steps from eeprom is "); Serial.println(last, DEC);
 
+  init_3461as();
+  show_char_wait(500, 'Z', 'J', 'y', '.');
+  show_char_wait(500, 'S', 't', 'E', 'P');
+  show_char_wait(500, '6', '6', '6', '6');
+  show_char_wait(500, ' ', ' ', ' ', ' ');
+
+  if (last < 0) generating = 1; else steps = last;
+
 	init_ble();
 	WiFi = init_wifi();
 	pinMode(BLUE_LED_PIN, OUTPUT);
   pinMode(BUTTON_PIN, INPUT);
-  init_3461as();
 	Serial.println("- [OK] ESP32 has been successfully started.");
-
-
-  show_char_wait(500, 'Z', 'J', 'y', '.');
-  show_char_wait(500, 'S', 't', 'E', 'P');
-  show_char_wait(500, '6', '6', '6', '6');
-  show_char_wait(500, 0xff, 0xff, 0xff, 0xff);
-  if (last < 0) generating = 1; else steps = last;
 }
 
 void loop() {
@@ -86,11 +87,11 @@ void loop() {
     // generating animating
     if (generating > 0) {
       if (generating < 4 * BLINK_TIME) g4 = random(10);
-      else if (generating == 4 * BLINK_TIME) g4 = random(split_digit(targets, 2));
+      else if (generating == 4 * BLINK_TIME) g4 = random(split_digit(targets, 2) + 1);
       if (generating < 3 * BLINK_TIME) g3 = random(10);
-      else if (generating == 3 * BLINK_TIME) g3 = random(split_digit(targets, 3));
+      else if (generating == 3 * BLINK_TIME) g3 = random(split_digit(targets, 3) + 1);
       if (generating < 2 * BLINK_TIME) g2 = random(10);
-      else if (generating == 2 * BLINK_TIME) g2 = random(split_digit(targets, 4));
+      else if (generating == 2 * BLINK_TIME) g2 = random(split_digit(targets, 4) + 1);
       if (generating < 1 * BLINK_TIME) g1 = random(10);
       else if (generating == 1 * BLINK_TIME) {
         // first digit is fixed to 1, or random from 1 to the 5th digit of target
@@ -155,17 +156,6 @@ void loop() {
     }
   }
 
-  if (!connectedDevices && oldConnectedDevices) {
-    Serial.println("Restarting advertising...");
-    //delay(500);
-    //pServer->startAdvertising();
-    oldConnectedDevices = connectedDevices;
-  }
-
-  if (connectedDevices && !oldConnectedDevices) {
-    oldConnectedDevices = connectedDevices;
-  }
-
   if (generating) show_char(g1, g2, g3, g4, led);
-  else show_char(split_digit(steps, 5), split_digit(steps, 4), split_digit(steps, 3), split_digit(steps, 2), led);
+  else show_char(split_digit(steps, 5, 0), split_digit(steps, 4, 0), split_digit(steps, 3, 0), split_digit(steps, 2, 0), led);
 }

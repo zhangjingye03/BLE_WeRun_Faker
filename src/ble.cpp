@@ -1,16 +1,18 @@
-#include <Arduino.h>
+#include "common.h"
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
 #include <BLE2902.h>
 
-#include "common.h"
+#define DEFAULT_BLE_NAME "ZJY智能计步器"
 
+// 0000fee7-0000-1000-8000-00805f9b34fb
 #define WECHAT_SERVICE_UUID "\xe7\xfe"
 #define WECHAT_CHAR_MAC_UUID "\xc9\xfe"
 #define WECHAT_CHAR_PEDOMETER_UUID "\xa1\xfe"
 #define WECHAT_CHAR_TARGET_UUID "\xa2\xfe"
 
+// 00002254-0000-1000-8000-00805f9b34fb
 #define ZJY_SERVICE_UUID "\x54\x22"
 #define ZJY_CHAR_BLUE_NAME_UUID "\x01\xff"
 #define ZJY_CHAR_ADD_HOW_MANY_ONE_TIME_UUID "\x02\xff"
@@ -108,17 +110,20 @@ class ZJYTargetCallbackHandler : public BLECharacteristicCallbacks {
 class ConnectionCallbackHelper : public BLEServerCallbacks {
 	void onConnect(BLEServer* pServer) {
 		Serial.println("Device connected."); connectedDevices++;
+		// dirty patch for multiple client connection
+		pServer->startAdvertising();
 	}
 
 	void onDisconnect(BLEServer* pServer) {
 		Serial.println("Device disconnected."); connectedDevices--;
+		pServer->startAdvertising();
 	}
 };
 
 void init_ble() {
 	Serial.println("- Initializing BLE services...");
 	// Bluetooth device name
-	String name = pref->getString("name", "ZJY智能计步器");
+	String name = pref->getString("name", DEFAULT_BLE_NAME);
 	Serial.print("set name to ");
 	Serial.println(name);
 	Serial.println(name.c_str());
@@ -127,7 +132,7 @@ void init_ble() {
 	pServer = BLEDevice::createServer();
 	pServer->setCallbacks(new ConnectionCallbackHelper());
 	// 0xfee7: wechat service
-	pService = pServer->createService(WECHAT_SERVICE_UUID);
+	pService = pServer->createService((std::string) WECHAT_SERVICE_UUID, 3);
 	// 0xfec9: mac characteristic
 	pChar_mac = pService->createCharacteristic(WECHAT_CHAR_MAC_UUID, BLECharacteristic::PROPERTY_READ);
 	BLEAddress mac_addr = BLEDevice::getAddress();
@@ -146,7 +151,7 @@ void init_ble() {
 	Serial.println("set wechat service done");
 
 	// 0x2254: ZJY private service
-	pService2 = pServer->createService(ZJY_SERVICE_UUID);
+	pService2 = pServer->createService((std::string) ZJY_SERVICE_UUID, 3);
 	// 0xff01: bluetooth name
 	pChar_name = pService2->createCharacteristic(ZJY_CHAR_BLUE_NAME_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE);
 	pChar_name->setCallbacks(new ZJYNameCallbackHandler());

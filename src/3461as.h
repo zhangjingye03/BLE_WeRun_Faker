@@ -1,4 +1,4 @@
-#include <Arduino.h>
+#include "common.h"
 
 void init_3461as();
 void show_num(uint16_t);
